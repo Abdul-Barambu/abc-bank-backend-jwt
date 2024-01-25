@@ -28,10 +28,12 @@ public class User {
     private String accountNumber;
     private BigDecimal accountBalance;
     private String email;
-    private String password;
+//    private String password;
     private String phoneNumber;
     private String status;
     @CreationTimestamp
     private String createdAt;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
     private Role role;
 }
