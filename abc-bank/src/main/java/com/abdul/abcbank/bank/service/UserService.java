@@ -9,5 +9,6 @@ public interface UserService {
     Response accountEnquiry(NameEnquiry nameEnquiry);
     Response creditAccount(CreditDebitRequest creditDebitRequest);
     Response DebitAccount(CreditDebitRequest creditDebitRequest);
+    Response Transfer(TransferRequest transferRequest);
 
 }

@@ -36,4 +36,8 @@ public class UserController {
     public Response debitAlert(@RequestBody CreditDebitRequest creditDebitRequest) {
         return userService.DebitAccount(creditDebitRequest);
     }
+    @PostMapping(path = "/transfer")
+    public Response transfer(@RequestBody TransferRequest transferRequest) {
+        return userService.Transfer(transferRequest);
+    }
 }

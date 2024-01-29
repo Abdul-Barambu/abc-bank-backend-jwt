@@ -3,15 +3,19 @@ package com.abdul.abcbank.bank.service.imple;
 import com.abdul.abcbank.bank.accountNumber.AccountNumber;
 import com.abdul.abcbank.bank.dto.*;
 import com.abdul.abcbank.bank.entity.Role;
+import com.abdul.abcbank.bank.entity.Transaction;
 import com.abdul.abcbank.bank.entity.User;
 import com.abdul.abcbank.bank.repository.UserRepository;
 import com.abdul.abcbank.bank.service.EmailService;
+import com.abdul.abcbank.bank.service.TransactionService;
 import com.abdul.abcbank.bank.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +23,7 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final TransactionService transactionService;
 
     @Override
     public Response createAccount(UserRequest userRequest) {
@@ -165,6 +170,17 @@ public class UserServiceImpl implements UserService {
 
         userRepository.save(accountToCredit);
 
+        TransactionRequest transactionRequest = TransactionRequest.builder()
+                .transactionType("CREDIT")
+                .accountName(accountToCredit.getName())
+                .accountNumber(accountToCredit.getAccountNumber())
+                .amount(creditDebitRequest.getAmount())
+                .balance(accountToCredit.getAccountBalance())
+                .date(LocalDate.now())
+                .time(LocalTime.now())
+                .build();
+        transactionService.saveTransaction(transactionRequest);
+
         Response response = Response.builder()
                 .code("007")
                 .message("Account credited")
@@ -217,6 +233,17 @@ public class UserServiceImpl implements UserService {
         }else {
             debitAccount.setAccountBalance(debitAccount.getAccountBalance().subtract(creditDebitRequest.getAmount()));
             userRepository.save(debitAccount);
+
+            TransactionRequest transactionRequest = TransactionRequest.builder()
+                    .transactionType("DEBIT")
+                    .accountName(debitAccount.getName())
+                    .accountNumber(debitAccount.getAccountNumber())
+                    .amount(creditDebitRequest.getAmount())
+                    .balance(debitAccount.getAccountBalance())
+                    .date(LocalDate.now())
+                    .time(LocalTime.now())
+                    .build();
+            transactionService.saveTransaction(transactionRequest);
         }
 
         Response response = Response.builder()
@@ -241,5 +268,101 @@ public class UserServiceImpl implements UserService {
         emailService.sendEmailAlert(emailRequest);
 
         return response;
+    }
+
+//    transfer
+    @Override
+    public Response Transfer(TransferRequest transferRequest) {
+
+        boolean isAccountToDebit = userRepository.existsByAccountNumber(transferRequest.getAccountFrom());
+        boolean isAccountToCredit = userRepository.existsByAccountNumber(transferRequest.getAccountTo());
+
+        if(!isAccountToDebit || !isAccountToCredit){
+            Response response = Response.builder()
+                    .code("010")
+                    .message("Account does not exist")
+                    .build();
+
+            return response;
+        }
+        User accountToDebit = userRepository.findByAccountNumber(transferRequest.getAccountFrom());
+        if(accountToDebit.getAccountBalance().compareTo(transferRequest.getAmount()) < 0){
+            Response response = Response.builder()
+                    .code("011")
+                    .message("Insufficient Balance")
+                    .accountInfo(null)
+                    .build();
+
+            return response;
+        }else {
+            accountToDebit.setAccountBalance(accountToDebit.getAccountBalance().subtract(transferRequest.getAmount()));
+            userRepository.save(accountToDebit);
+
+            TransactionRequest transactionRequest = TransactionRequest.builder()
+                    .transactionType("DEBIT TRANSFER To "+transferRequest.getAccountTo())
+                    .accountName(accountToDebit.getName())
+                    .accountNumber(transferRequest.getAccountFrom())
+                    .amount(transferRequest.getAmount())
+                    .balance(accountToDebit.getAccountBalance())
+                    .date(LocalDate.now())
+                    .time(LocalTime.now())
+                    .build();
+            transactionService.saveTransaction(transactionRequest);
+
+            String emailMessageDebit = "Debit! \nAcc:" + transferRequest.getAccountFrom() + "\nAmt:₦" + transferRequest.getAmount() +
+                    "\nTID: 0003872539 \nDate:" + LocalDateTime.now() + "\nBal:₦" + accountToDebit.getAccountBalance();
+
+//        mail debit
+            EmailRequest emailRequest = EmailRequest.builder()
+                    .recipient(accountToDebit.getEmail())
+                    .subject("DEBIT")
+                    .message(emailMessageDebit)
+                    .build();
+
+            emailService.sendEmailAlert(emailRequest);
+        }
+
+        if(!isAccountToDebit || !isAccountToCredit){
+            Response response = Response.builder()
+                    .code("010")
+                    .message("Account does not exist")
+                    .build();
+
+            return response;
+        }else {
+            User accountToCredit = userRepository.findByAccountNumber(transferRequest.getAccountTo());
+            accountToCredit.setAccountBalance(accountToCredit.getAccountBalance().add(transferRequest.getAmount()));
+            userRepository.save(accountToCredit);
+
+            TransactionRequest transactionRequest = TransactionRequest.builder()
+                    .transactionType("CREDIT TRANSFER From "+transferRequest.getAccountFrom())
+                    .accountName(accountToCredit.getName())
+                    .accountNumber(transferRequest.getAccountTo())
+                    .amount(transferRequest.getAmount())
+                    .balance(accountToDebit.getAccountBalance())
+                    .date(LocalDate.now())
+                    .time(LocalTime.now())
+                    .build();
+            transactionService.saveTransaction(transactionRequest);
+
+            String emailMessageCredit = "CREDIT! \nAcc:" + transferRequest.getAccountTo() + "\nAmt:₦" + transferRequest.getAmount() +
+                    "\nTID: 0003872539 \nDate:" + LocalDateTime.now() + "\nBal:₦" + accountToCredit.getAccountBalance();
+
+//        mail credit
+            EmailRequest emailRequest = EmailRequest.builder()
+                    .recipient(accountToCredit.getEmail())
+                    .subject("CREDIT")
+                    .message(emailMessageCredit)
+                    .build();
+
+            emailService.sendEmailAlert(emailRequest);
+        }
+
+        Response response = Response.builder()
+                .code("012")
+                .message("Transfer successfully")
+                .build();
+            return response;
+
     }
 }
